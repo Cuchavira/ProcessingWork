@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en" class="no-js">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<title>Digital art - Alveoli</title>
+		<meta name="description" content="work of Hongni Ye." />
+		<meta name="keywords" content="digital,design" />
+		<meta name="author" content="Hongni" />
+		<link rel="shortcut icon" href="favicon.ico">
+		<link href="https://fonts.googleapis.com/css?family=Prata|Nunito+Sans" rel="stylesheet">
+
+		<!-- Global site tag (gtag.js) - Google Analytics -->
+		<script async src="https://www.googletagmanager.com/gtag/js?id=G-R7KD29VVN3"></script>
+		<script src="https://cdn.jsdelivr.net/processing.js/1.4.8/processing.min.js"></script>
+			<script src="js/maxim.js"></script>
+			<script src="js/processing.js"></script>
+
+		<script>
+		  window.dataLayer = window.dataLayer || [];
+		  function gtag(){dataLayer.push(arguments);}
+		  gtag('js', new Date());
+		  gtag('config', 'G-R7KD29VVN3');
+		</script>
+	</head>
+
+	<body >
+		<h1> Alveoli </h1>
+<canvas id="mycanvas"></canvas>
+
+<script>
+
+    var sketchProc = function(processingInstance) {
+        with (processingInstance) {
+
+ /*
+         hit Space bar to reset the number of layers/colors
+         hit 'b' to get black and white layers
+         hit 'a' to toggle auto mode
+         Have fun!
+ */
+
+Maxim maxim;
+AudioPlayer player;
+
+Boid[] boids=new Boid[5];
+int nblayers;
+int maxdeep;
+int []deep;
+color []colors;
+int brushdia=250;
+int loc;
+boolean auto=true;
+float bgcolor=color(255);
+float opacita2;
+float move2 = 20;
+
+
+
+void setup() {
+  fullScreen();
+  maxim = new Maxim(this);
+  player = maxim.loadFile("atmos1.wav");
+  player.setLooping(true);
+  smooth(8);
+  frameRate(200);
+
+
+  nblayers=3;
+  //nblayers=int(random(3,10));
+  deep=new int [width*height];
+  maxdeep=nblayers*160;
+  for (int i=0; i<boids.length; i++) {
+    boids[i]=new Boid(random(width), random(height));
+  }
+  colors=new color[nblayers];
+  color col=color(int(random(255)), int(random(255)), int(random(255)));
+  for (int i=0; i<nblayers; i++) {
+    if(i%2==0){colors[i]=color(int(random(255)), int(random(255)), int(random(255)));}
+    else colors[i]=col;
+  }
+  for (int i=0; i<10; i++) {
+    deep[i]=maxdeep;
+  }
+  background(col);
+  loadPixels();
+  filter(BLUR, 10);
+}
+void draw() {
+
+  if (mousePressed) {
+         player.play();
+    for (int i=-brushdia; i<=brushdia; i++) {
+      for (int j=-brushdia; j<=brushdia; j++) {
+        loc=((j+mouseY+height)%height)*width+i+mouseX;
+        float distance=sqrt(i*i+j*j);
+        int prox=25-int(distance*50/brushdia);
+        if (distance<brushdia/2) {
+          deep[loc]+=maxdeep-prox;
+          deep[loc]%=maxdeep;
+          int deepval=int(deep[loc]/255);
+          pixels[loc]=combineColors(colors[deepval], deep[loc]%255, colors[(deepval+nblayers-1)%nblayers]);
+        }
+      }
+    }
+
+  } else if (auto) {
+    for (int b=0; b<boids.length; b++) {
+      boids[b].run();
+      boids[b].wander();
+      brushdia=int(boids[b].dia);
+      for (int i=-brushdia; i<=brushdia; i++) {
+        for (int j=-brushdia; j<=brushdia; j++) {
+          loc=((j+int(boids[b].location.y)+height)%height)*width+i+int(boids[b].location.x);
+          float distance=sqrt(i*i+j*j);
+          int prox=25-int(distance*50/brushdia);
+          if (distance<brushdia/2) {
+            deep[loc]+=maxdeep-prox;
+            deep[loc]%=maxdeep;
+            int deepval=int(deep[loc]/255);
+            pixels[loc]=combineColors(colors[deepval], deep[loc]%255, colors[(deepval+nblayers-1)%nblayers]);
+          }
+        }
+      }
+    }
+  }
+
+
+  updatePixels();
+}
+
+color combineColors(color c1, int alp, color c2) {
+  float r, g, b, a1, r1, g1, b1, r2, g2, b2;
+  a1=alp/255;
+  r1=c1>> 16 & 0xFF;
+  g1=c1>> 8 & 0xFF;
+  b1=c1 & 0xFF;
+  r2=c2>> 16 & 0xFF;
+  g2=c2>> 8 & 0xFF;
+  b2=c2 & 0xFF;
+  r=r1*a1+r2*(1-a1);
+  g=g1*a1+g2*(1-a1);
+  b=b1*a1+b2*(1-a1);
+  return color(r, g, b);
+}
+
+void keyReleased() {
+  switch (keyCode) {
+  case 32:
+    setup();
+    break;
+  case 65:
+    auto=!auto;
+    brushdia=50;
+    break;
+  case 66:
+    nblayers=2;
+    deep=new int [width*height];
+    maxdeep=2;
+    colors=new color[nblayers];
+    colors[0]=color(0);
+    colors[1]=color(255);
+    for (int i=0; i<3; i++) {
+      deep[i]=maxdeep;
+    }
+    background(colors[nblayers-1]);
+    loadPixels();
+    break;
+  }
+}
+class Boid {
+
+  PVector location;
+  PVector velocity;
+  float acceleration;
+  float dia;
+  float r;
+  float wandertheta;
+  float maxforce;    // Maximum steering force
+  float maxspeed;    // Maximum speed
+
+    Boid(float x, float y) {
+    location = new PVector(x, y);
+    init();
+  }
+  void init() {
+    acceleration = new PVector(random(-1, 1), random(-1, 1));
+    velocity = new PVector(0, 0);
+    r = int(random(3, 300));
+    wandertheta = 0;
+    maxspeed = 200;
+    maxforce = 20;
+    dia=random(30, 100);
+  }
+
+  void run() {
+
+    update();
+    borders();
+  }
+  // Method to update location
+  void update() {
+    // Update velocity
+    velocity.add(acceleration);
+    // Limit speed
+    velocity.limit(maxspeed);
+    location.add(velocity);
+    if (random(1)>.995) {
+      init();
+    }
+  }
+
+  void wander() {
+    float wanderR = 255;         // Radius for our "wander circle"
+    float wanderD = 150;         // Distance for our "wander circle"
+    float change = 5;
+    wandertheta += random(-change, change);     // Randomly change wander theta
+
+    // Now we have to calculate the new location to steer towards on the wander circle
+    PVector circleloc = velocity.get();    // Start with velocity
+    circleloc.normalize();            // Normalize to get heading
+    circleloc.mult(wanderD);          // Multiply by distance
+    circleloc.add(location);               // Make it relative to boid's location
+
+      float h = velocity.heading2D();        // We need to know the heading to offset wandertheta
+
+    PVector circleOffSet = new PVector(wanderR*cos(wandertheta+h), wanderR*sin(wandertheta+h));
+    PVector target = PVector.add(circleloc, circleOffSet);
+    seek(target);
+  }
+
+  void applyForce(PVector force) {
+    // We could add mass here if we want A = F / M
+    acceleration.add(force);
+  }
+
+
+  // A method that calculates and applies a steering force towards a target
+  // STEER = DESIRED MINUS VELOCITY
+  void seek(PVector target) {
+    PVector desired = PVector.sub(target, location);  // A vector pointing from the location to the target
+
+    // Normalize desired and scale to maximum speed
+    desired.normalize();
+    desired.mult(maxspeed);
+    // Steering = Desired minus Velocity
+    PVector steer = PVector.sub(desired, velocity);
+    steer.limit(maxforce);  // Limit to maximum steering force
+
+      applyForce(steer);
+  }
+
+  // Wraparound
+  void borders() {
+    if (location.x < -r) location.x = width+r;
+    if (location.y < -r) location.y = height+r;
+    if (location.x > width+r) location.x = -r;
+    if (location.y > height+r) location.y = -r;
+  }
+}
+
+
+
+
+        }
+    }
+
+    var canvas = document.getElementById("mycanvas");
+    var processingInstance = new Processing(canvas, sketchProc);
+
+</script>
+
+
+
+
+
+
+
+	</body>
+</html>
